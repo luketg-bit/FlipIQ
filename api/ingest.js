@@ -1,4 +1,4 @@
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   const SUPABASE_URL = 'https://fasszewcztnqcjaaswcm.supabase.co';
   const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
