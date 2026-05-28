@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlipIQ — Know what moves, before you buy</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f9f9f8;
+    --bg2: #ffffff;
+    --bg3: #f1f0ec;
+    --text: #1a1a18;
+    --text2: #6b6b67;
+    --text3: #9e9e99;
+    --border: rgba(0,0,0,0.1);
+    --border2: rgba(0,0,0,0.18);
+    --accent: #2563eb;
+    --accent-bg: #eff6ff;
+    --green: #16a34a;
+    --green-bg: #f0fdf4;
+    --red: #dc2626;
+    --red-bg: #fef2f2;
+    --amber: #d97706;
+    --amber-bg: #fffbeb;
+    --radius: 10px;
+    --radius-lg: 14px;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* NAV */
+  nav { background: var(--bg2); border-bottom: 0.5px solid var(--border); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 56px; position: sticky; top: 0; z-index: 100; }
+  .nav-logo { font-size: 17px; font-weight: 600; letter-spacing: -0.3px; }
+  .nav-logo span { color: var(--accent); }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .nav-btn { padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; border: 0.5px solid var(--border2); background: transparent; color: var(--text); transition: background 0.15s; }
+  .nav-btn:hover { background: var(--bg3); }
+  .nav-btn.primary { background: var(--accent); color: white; border-color: var(--accent); }
+  .nav-btn.primary:hover { background: #1d4ed8; }
+  .user-pill { font-size: 12px; color: var(--text2); background: var(--bg3); padding: 5px 12px; border-radius: 20px; }
+
+  /* AUTH MODAL */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; display: flex; align-items: center; justify-content: center; }
+  .modal { background: var(--bg2); border-radius: var(--radius-lg); padding: 2rem; width: 380px; max-width: 90vw; }
+  .modal h2 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .modal p { font-size: 13px; color: var(--text2); margin-bottom: 1.5rem; }
+  .form-group { margin-bottom: 12px; }
+  .form-group label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 5px; font-weight: 500; }
+  .form-group input, .form-group select { width: 100%; padding: 9px 12px; border: 0.5px solid var(--border2); border-radius: 8px; font-size: 14px; background: var(--bg); color: var(--text); outline: none; }
+  .form-group input:focus, .form-group select:focus { border-color: var(--accent); }
+  .btn-full { width: 100%; padding: 10px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; background: var(--accent); color: white; margin-top: 8px; }
+  .btn-full:hover { background: #1d4ed8; }
+  .modal-switch { text-align: center; margin-top: 12px; font-size: 13px; color: var(--text2); }
+  .modal-switch a { color: var(--accent); cursor: pointer; text-decoration: none; }
+  .modal-error { font-size: 13px; color: var(--red); margin-top: 8px; text-align: center; }
+  .hidden { display: none !important; }
+
+  /* HERO (logged out) */
+  .hero { max-width: 680px; margin: 6rem auto; padding: 0 2rem; text-align: center; }
+  .hero h1 { font-size: 38px; font-weight: 700; letter-spacing: -1px; line-height: 1.15; margin-bottom: 1rem; }
+  .hero h1 span { color: var(--accent); }
+  .hero p { font-size: 16px; color: var(--text2); line-height: 1.7; margin-bottom: 2rem; }
+  .hero-btns { display: flex; gap: 12px; justify-content: center; }
+  .hero-btn { padding: 11px 28px; border-radius: 9px; font-size: 14px; font-weight: 500; cursor: pointer; border: 0.5px solid var(--border2); background: transparent; color: var(--text); }
+  .hero-btn.primary { background: var(--accent); color: white; border-color: var(--accent); }
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 4rem; text-align: left; }
+  .feature { background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem; }
+  .feature-icon { font-size: 20px; margin-bottom: 10px; }
+  .feature h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .feature p { font-size: 13px; color: var(--text2); line-height: 1.5; }
+
+  /* MAIN APP */
+  .app { max-width: 1100px; margin: 0 auto; padding: 2rem; }
+
+  /* SEARCH BAR */
+  .search-section { background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1.5rem; margin-bottom: 1.5rem; }
+  .search-row { display: flex; gap: 10px; align-items: flex-end; }
+  .search-field { flex: 2; }
+  .search-field label, .loc-field label, .cat-field label { display: block; font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .loc-field { flex: 1; }
+  .cat-field { flex: 1; }
+  .search-field input, .loc-field input, .cat-field select { width: 100%; padding: 10px 14px; border: 0.5px solid var(--border2); border-radius: 9px; font-size: 14px; background: var(--bg); color: var(--text); outline: none; }
+  .search-field input:focus, .loc-field input:focus { border-color: var(--accent); }
+  .search-btn { padding: 10px 24px; background: var(--accent); color: white; border: none; border-radius: 9px; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+  .search-btn:hover { background: #1d4ed8; }
+  .search-btn:disabled { background: var(--text3); cursor: not-allowed; }
+
+  /* STATS CARDS */
+  .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 1.5rem; }
+  .stat-card { background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .stat-label { font-size: 11px; color: var(--text2); font-weight: 500; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; }
+  .stat-value { font-size: 22px; font-weight: 600; color: var(--text); letter-spacing: -0.5px; }
+  .stat-sub { font-size: 11px; color: var(--text3); margin-top: 3px; }
+
+  /* DISTRIBUTION BAR */
+  .dist-section { background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
+  .dist-title { font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 12px; }
+  .dist-bars { display: flex; gap: 6px; align-items: flex-end; height: 80px; }
+  .dist-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+  .dist-bar { width: 100%; background: var(--accent); border-radius: 4px 4px 0 0; transition: height 0.3s; min-height: 3px; opacity: 0.8; }
+  .dist-bar-label { font-size: 10px; color: var(--text3); text-align: center; }
+  .dist-bar-count { font-size: 11px; font-weight: 600; color: var(--text2); }
+
+  /* LISTINGS */
+  .listings-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .listings-title { font-size: 14px; font-weight: 600; }
+  .listings-count-badge { font-size: 12px; color: var(--text2); background: var(--bg3); padding: 3px 10px; border-radius: 20px; }
+  .filter-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .filter-btn { padding: 5px 14px; border-radius: 20px; font-size: 12px; border: 0.5px solid var(--border2); background: transparent; color: var(--text2); cursor: pointer; }
+  .filter-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+  .listings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .listing-card { background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; cursor: pointer; transition: border-color 0.15s, transform 0.1s; }
+  .listing-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .listing-img { width: 100%; height: 130px; object-fit: cover; background: var(--bg3); display: block; }
+  .listing-img-ph { width: 100%; height: 130px; background: var(--bg3); display: flex; align-items: center; justify-content: center; color: var(--text3); font-size: 28px; }
+  .listing-body { padding: 10px 12px 12px; }
+  .listing-title { font-size: 13px; font-weight: 500; line-height: 1.4; margin-bottom: 6px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .listing-price { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .listing-meta { font-size: 11px; color: var(--text3); margin-bottom: 6px; }
+  .listing-badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 6px; }
+  .badge-deal { background: var(--green-bg); color: var(--green); }
+  .badge-fair { background: var(--accent-bg); color: var(--accent); }
+  .badge-high { background: var(--red-bg); color: var(--red); }
+  .badge-watch { background: var(--amber-bg); color: var(--amber); }
+
+  /* LISTING DETAIL PANEL */
+  .detail-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 150; display: flex; align-items: flex-start; justify-content: flex-end; }
+  .detail-panel { background: var(--bg2); width: 480px; max-width: 95vw; height: 100vh; overflow-y: auto; padding: 1.5rem; box-shadow: -4px 0 24px rgba(0,0,0,0.1); }
+  .detail-close { float: right; background: var(--bg3); border: none; border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer; color: var(--text2); }
+  .detail-img { width: 100%; height: 200px; object-fit: cover; border-radius: var(--radius); margin: 1rem 0; background: var(--bg3); }
+  .detail-title { font-size: 18px; font-weight: 600; margin-bottom: 4px; clear: both; }
+  .detail-price { font-size: 26px; font-weight: 700; margin-bottom: 1rem; }
+  .detail-section { margin-bottom: 1.25rem; }
+  .detail-section-title { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+  .compare-bar { margin-bottom: 8px; }
+  .compare-bar-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--text2); margin-bottom: 3px; }
+  .compare-bar-track { height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; }
+  .compare-bar-fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width 0.4s; }
+  .compare-bar-fill.green { background: var(--green); }
+  .compare-bar-fill.red { background: var(--red); }
+  .insight-box { background: var(--bg3); border-radius: var(--radius); padding: 12px 14px; font-size: 13px; line-height: 1.6; color: var(--text2); margin-bottom: 10px; }
+  .insight-box strong { color: var(--text); }
+  .detail-cta { display: block; width: 100%; padding: 11px; background: var(--accent); color: white; border: none; border-radius: 9px; font-size: 14px; font-weight: 500; cursor: pointer; text-align: center; text-decoration: none; margin-top: 1rem; }
+  .detail-cta:hover { background: #1d4ed8; }
+
+  /* LOADING */
+  .loading { text-align: center; padding: 3rem; color: var(--text2); font-size: 14px; }
+  .spinner { width: 28px; height: 28px; border: 2.5px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 12px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* EMPTY STATE */
+  .empty { text-align: center; padding: 4rem 2rem; }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; }
+  .empty h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .empty p { font-size: 13px; color: var(--text2); }
+
+  /* SCRAPE STATUS */
+  .scrape-status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text3); margin-top: 10px; }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+  .status-dot.pending { background: var(--amber); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  @media (max-width: 700px) {
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .search-row { flex-direction: column; }
+    .features { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 28px; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">Flip<span>IQ</span></div>
+  <div class="nav-right">
+    <span class="user-pill hidden" id="userPill">—</span>
+    <button class="nav-btn hidden" id="logoutBtn" onclick="logout()">Sign out</button>
+    <button class="nav-btn" id="loginNavBtn" onclick="showModal('login')">Sign in</button>
+    <button class="nav-btn primary" id="signupNavBtn" onclick="showModal('signup')">Get started</button>
+  </div>
+</nav>
+
+<!-- AUTH MODAL -->
+<div class="modal-overlay hidden" id="modalOverlay" onclick="closeModalOutside(event)">
+  <div class="modal">
+    <div id="loginForm">
+      <h2>Sign in</h2>
+      <p>Welcome back to FlipIQ</p>
+      <div class="form-group"><label>Email</label><input type="email" id="loginEmail" placeholder="you@email.com"></div>
+      <div class="form-group"><label>Password</label><input type="password" id="loginPassword" placeholder="••••••••"></div>
+      <button class="btn-full" onclick="login()">Sign in</button>
+      <div class="modal-error hidden" id="loginError"></div>
+      <div class="modal-switch">No account? <a onclick="showModal('signup')">Sign up free</a></div>
+    </div>
+    <div id="signupForm" class="hidden">
+      <h2>Create account</h2>
+      <p>Start tracking your local flip market</p>
+      <div class="form-group"><label>Email</label><input type="email" id="signupEmail" placeholder="you@email.com"></div>
+      <div class="form-group"><label>Password</label><input type="password" id="signupPassword" placeholder="At least 6 characters"></div>
+      <div class="form-group">
+        <label>Your city & state</label>
+        <input type="text" id="signupCity" placeholder="e.g. Albany, NY">
+      </div>
+      <div class="form-group">
+        <label>What do you flip?</label>
+        <select id="signupCategory">
+          <option value="boats">Boats</option>
+          <option value="atvs">ATVs / Four-wheelers</option>
+          <option value="lawnmowers">Lawn equipment</option>
+          <option value="motorcycles">Motorcycles</option>
+          <option value="cars">Cars</option>
+          <option value="heavy_equipment">Heavy equipment</option>
+        </select>
+      </div>
+      <button class="btn-full" onclick="signup()">Create free account</button>
+      <div class="modal-error hidden" id="signupError"></div>
+      <div class="modal-switch">Have an account? <a onclick="showModal('login')">Sign in</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- HERO (logged out) -->
+<div id="heroSection">
+  <div class="hero">
+    <h1>Know what moves<br><span>before you buy</span></h1>
+    <p>FlipIQ tracks local marketplace listings for boats, ATVs, lawnmowers, cars and more — so you know average prices, what sells fast, and whether a deal is actually a deal.</p>
+    <div class="hero-btns">
+      <button class="hero-btn primary" onclick="showModal('signup')">Get started free</button>
+      <button class="hero-btn" onclick="showModal('login')">Sign in</button>
+    </div>
+    <div class="features">
+      <div class="feature">
+        <div class="feature-icon">📍</div>
+        <h3>Hyperlocal data</h3>
+        <p>Set your city and radius. See only what's selling in your actual market, not national averages.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">📊</div>
+        <h3>Real price intelligence</h3>
+        <p>Average price, median, price distribution, and outlier filtering so bad listings don't skew your data.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">⚡</div>
+        <h3>Instant deal scoring</h3>
+        <p>Click any listing and instantly see how it compares to market average. Know if it's a deal in seconds.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN APP (logged in) -->
+<div class="app hidden" id="appSection">
+
+  <div class="search-section">
+    <div class="search-row">
+      <div class="search-field">
+        <label>Search</label>
+        <input type="text" id="searchInput" placeholder="e.g. Bayliner, aluminum fishing boat, jon boat..." onkeydown="if(event.key==='Enter')runSearch()">
+      </div>
+      <div class="cat-field">
+        <label>Category</label>
+        <select id="catSelect">
+          <option value="boats">Boats</option>
+          <option value="atvs">ATVs / Four-wheelers</option>
+          <option value="lawnmowers">Lawn equipment</option>
+          <option value="motorcycles">Motorcycles</option>
+          <option value="cars">Cars</option>
+          <option value="heavy_equipment">Heavy equipment</option>
+        </select>
+      </div>
+      <div class="loc-field">
+        <label>Location</label>
+        <input type="text" id="locationInput" placeholder="e.g. Albany, NY">
+      </div>
+      <button class="search-btn" id="searchBtn" onclick="runSearch()">Search market</button>
+    </div>
+    <div class="scrape-status" id="scrapeStatus"></div>
+  </div>
+
+  <div id="statsSection" class="hidden">
+    <div class="stats-grid" id="statsGrid"></div>
+    <div class="dist-section">
+      <div class="dist-title">Price distribution</div>
+      <div class="dist-bars" id="distBars"></div>
+    </div>
+  </div>
+
+  <div id="listingsSection" class="hidden">
+    <div class="listings-header">
+      <div class="listings-title" id="listingsTitle">Listings</div>
+      <div class="listings-count-badge" id="listingsCountBadge"></div>
+    </div>
+    <div class="filter-row">
+      <button class="filter-btn active" onclick="setFilter('all', this)">All</button>
+      <button class="filter-btn" onclick="setFilter('deal', this)">🟢 Deals</button>
+      <button class="filter-btn" onclick="setFilter('fair', this)">🔵 Fair price</button>
+      <button class="filter-btn" onclick="setFilter('high', this)">🔴 Overpriced</button>
+    </div>
+    <div class="listings-grid" id="listingsGrid"></div>
+  </div>
+
+  <div id="loadingSection" class="hidden">
+    <div class="loading"><div class="spinner"></div>Searching your market...</div>
+  </div>
+
+  <div id="emptySection" class="hidden">
+    <div class="empty">
+      <div class="empty-icon">🔍</div>
+      <h3>No listings found</h3>
+      <p>Try a broader search term or different category</p>
+    </div>
+  </div>
+
+</div>
+
+<!-- LISTING DETAIL PANEL -->
+<div class="detail-overlay hidden" id="detailOverlay" onclick="closeDetailOutside(event)">
+  <div class="detail-panel" id="detailPanel"></div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://fasszewcztnqcjaaswcm.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZhc3N6ZXdjenRucWNqYWFzd2NtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5MzQ1MTUsImV4cCI6MjA5NTUxMDUxNX0.MTFUbgyo8EO6xpiFil_1kl6OUNEVJQ6rnpVqkms8TSY';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser = null;
+let allListings = [];
+let filteredListings = [];
+let marketStats = {};
+let activeFilter = 'all';
+
+// AUTH
+async function login() {
+  const email = document.getElementById('loginEmail').value;
+  const pw = document.getElementById('loginPassword').value;
+  const { error } = await sb.auth.signInWithPassword({ email, password: pw });
+  if (error) { showError('loginError', error.message); return; }
+  closeModal();
+}
+
+async function signup() {
+  const email = document.getElementById('signupEmail').value;
+  const pw = document.getElementById('signupPassword').value;
+  const city = document.getElementById('signupCity').value;
+  const cat = document.getElementById('signupCategory').value;
+  const { data, error } = await sb.auth.signUp({ email, password: pw });
+  if (error) { showError('signupError', error.message); return; }
+  if (data.user) {
+    await sb.from('profiles').upsert({ id: data.user.id, city, default_category: cat });
+  }
+  closeModal();
+}
+
+async function logout() {
+  await sb.auth.signOut();
+  currentUser = null;
+  showHero();
+}
+
+sb.auth.onAuthStateChange(async (event, session) => {
+  if (session?.user) {
+    currentUser = session.user;
+    const { data: profile } = await sb.from('profiles').select('*').eq('id', currentUser.id).single();
+    showApp(profile);
+  } else {
+    showHero();
+  }
+});
+
+function showApp(profile) {
+  document.getElementById('heroSection').classList.add('hidden');
+  document.getElementById('appSection').classList.remove('hidden');
+  document.getElementById('loginNavBtn').classList.add('hidden');
+  document.getElementById('signupNavBtn').classList.add('hidden');
+  document.getElementById('logoutBtn').classList.remove('hidden');
+  document.getElementById('userPill').classList.remove('hidden');
+  document.getElementById('userPill').textContent = currentUser.email.split('@')[0];
+  if (profile?.city) document.getElementById('locationInput').value = profile.city;
+  if (profile?.default_category) document.getElementById('catSelect').value = profile.default_category;
+}
+
+function showHero() {
+  document.getElementById('heroSection').classList.remove('hidden');
+  document.getElementById('appSection').classList.add('hidden');
+  document.getElementById('loginNavBtn').classList.remove('hidden');
+  document.getElementById('signupNavBtn').classList.remove('hidden');
+  document.getElementById('logoutBtn').classList.add('hidden');
+  document.getElementById('userPill').classList.add('hidden');
+}
+
+// MODAL
+function showModal(type) {
+  document.getElementById('modalOverlay').classList.remove('hidden');
+  document.getElementById('loginForm').classList.toggle('hidden', type !== 'login');
+  document.getElementById('signupForm').classList.toggle('hidden', type !== 'signup');
+}
+function closeModal() { document.getElementById('modalOverlay').classList.add('hidden'); }
+function closeModalOutside(e) { if (e.target.id === 'modalOverlay') closeModal(); }
+function showError(id, msg) {
+  const el = document.getElementById(id);
+  el.classList.remove('hidden');
+  el.textContent = msg;
+}
+
+// SEARCH
+async function runSearch() {
+  const query = document.getElementById('searchInput').value.trim();
+  const location = document.getElementById('locationInput').value.trim();
+  const category = document.getElementById('catSelect').value;
+  if (!query && !location) return;
+
+  setLoading(true);
+
+  // Build query against listings table
+  let dbQuery = sb.from('listings')
+    .select('*')
+    .eq('category', category)
+    .gt('price', 50)
+    .lt('price', 75000)
+    .order('scraped_at', { ascending: false })
+    .limit(200);
+
+  if (location) dbQuery = dbQuery.ilike('location', `%${location.split(',')[0].trim()}%`);
+  if (query) dbQuery = dbQuery.ilike('title', `%${query}%`);
+
+  const { data, error } = await dbQuery;
+
+  if (error || !data || data.length === 0) {
+    // Fall back to Albany seed data if no DB results yet
+    allListings = getSeedData().filter(l => {
+      const matchQ = !query || l.title.toLowerCase().includes(query.toLowerCase());
+      return matchQ;
+    });
+  } else {
+    allListings = dedupeAndFilter(data);
+  }
+
+  if (allListings.length === 0) {
+    setLoading(false);
+    showEmpty();
+    return;
+  }
+
+  marketStats = computeStats(allListings);
+  filteredListings = [...allListings];
+  activeFilter = 'all';
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.filter-btn')[0].classList.add('active');
+
+  setLoading(false);
+  renderStats();
+  renderListings();
+
+  const status = document.getElementById('scrapeStatus');
+  status.innerHTML = `<span class="status-dot"></span> ${allListings.length} listings · ${location || 'Albany, NY'} · Live data`;
+
+  // Save search to profile
+  if (currentUser) {
+    await sb.from('profiles').upsert({ id: currentUser.id, city: location, default_category: category });
+  }
+}
+
+function dedupeAndFilter(data) {
+  const seen = new Set();
+  return data.filter(d => {
+    if (seen.has(d.url)) return false;
+    seen.add(d.url);
+    return d.price > 50 && d.price < 75000;
+  });
+}
+
+function computeStats(listings) {
+  const prices = listings.map(l => l.price).sort((a,b) => a-b);
+  const n = prices.length;
+  const avg = Math.round(prices.reduce((a,b)=>a+b,0)/n);
+  const median = prices[Math.floor(n/2)];
+  const q1 = prices[Math.floor(n*0.25)];
+  const q3 = prices[Math.floor(n*0.75)];
+  const iqr = q3 - q1;
+  const filtered = prices.filter(p => p >= q1 - 1.5*iqr && p <= q3 + 1.5*iqr);
+  const cleanAvg = Math.round(filtered.reduce((a,b)=>a+b,0)/filtered.length);
+  const under1k = prices.filter(p=>p<1000).length;
+
+  const buckets = [
+    {label:'<$500', min:0, max:500, count:0},
+    {label:'$500–1k', min:500, max:1000, count:0},
+    {label:'$1k–2.5k', min:1000, max:2500, count:0},
+    {label:'$2.5k–5k', min:2500, max:5000, count:0},
+    {label:'$5k–10k', min:5000, max:10000, count:0},
+    {label:'>$10k', min:10000, max:Infinity, count:0},
+  ];
+  prices.forEach(p => { const b = buckets.find(b=>p>=b.min&&p<b.max); if(b) b.count++; });
+
+  return { avg, median, cleanAvg, q1, q3, under1k, total: n, buckets };
+}
+
+function priceBadge(price, stats) {
+  const pct = (price - stats.cleanAvg) / stats.cleanAvg;
+  if (pct < -0.2) return { label: '🟢 Good deal', cls: 'badge-deal' };
+  if (pct < 0.1) return { label: '🔵 Fair price', cls: 'badge-fair' };
+  if (pct < 0.35) return { label: '🟡 Watch it', cls: 'badge-watch' };
+  return { label: '🔴 Overpriced', cls: 'badge-high' };
+}
+
+function renderStats() {
+  const s = marketStats;
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Listings found</div><div class="stat-value">${s.total}</div><div class="stat-sub">active now</div></div>
+    <div class="stat-card"><div class="stat-label">Average price</div><div class="stat-value">$${s.avg.toLocaleString()}</div><div class="stat-sub">all listings</div></div>
+    <div class="stat-card"><div class="stat-label">Clean average</div><div class="stat-value">$${s.cleanAvg.toLocaleString()}</div><div class="stat-sub">outliers removed</div></div>
+    <div class="stat-card"><div class="stat-label">Median price</div><div class="stat-value">$${s.median.toLocaleString()}</div><div class="stat-sub">50th percentile</div></div>
+    <div class="stat-card"><div class="stat-label">Under $1,000</div><div class="stat-value">${s.under1k}</div><div class="stat-sub">budget targets</div></div>
+  `;
+
+  const max = Math.max(...s.buckets.map(b=>b.count), 1);
+  document.getElementById('distBars').innerHTML = s.buckets.map(b => `
+    <div class="dist-bar-wrap">
+      <div class="dist-bar-count">${b.count}</div>
+      <div class="dist-bar" style="height:${Math.max((b.count/max)*64,3)}px"></div>
+      <div class="dist-bar-label">${b.label}</div>
+    </div>
+  `).join('');
+
+  document.getElementById('statsSection').classList.remove('hidden');
+}
+
+function renderListings() {
+  const s = marketStats;
+  const title = document.getElementById('searchInput').value || 'All listings';
+  document.getElementById('listingsTitle').textContent = title;
+  document.getElementById('listingsCountBadge').textContent = `${filteredListings.length} listing${filteredListings.length!==1?'s':''}`;
+
+  document.getElementById('listingsGrid').innerHTML = filteredListings.map((l, i) => {
+    const badge = priceBadge(l.price, s);
+    return `
+    <div class="listing-card" onclick="openDetail(${i})">
+      ${l.photo ? `<img class="listing-img" src="${l.photo}" alt="${l.title}" loading="lazy" onerror="this.style.display='none'">` : `<div class="listing-img-ph">⚓</div>`}
+      <div class="listing-body">
+        <div class="listing-title">${l.title}</div>
+        <div class="listing-price">$${l.price.toLocaleString()}</div>
+        <div class="listing-meta">${l.location || 'Albany area'}</div>
+        <span class="listing-badge ${badge.cls}">${badge.label}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('listingsSection').classList.remove('hidden');
+}
+
+function setFilter(type, btn) {
+  activeFilter = type;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const s = marketStats;
+  if (type === 'all') { filteredListings = [...allListings]; }
+  else if (type === 'deal') { filteredListings = allListings.filter(l => (l.price-s.cleanAvg)/s.cleanAvg < -0.2); }
+  else if (type === 'fair') { const f = l => { const p=(l.price-s.cleanAvg)/s.cleanAvg; return p>=-0.2&&p<0.1; }; filteredListings = allListings.filter(f); }
+  else if (type === 'high') { filteredListings = allListings.filter(l => (l.price-s.cleanAvg)/s.cleanAvg >= 0.35); }
+  renderListings();
+}
+
+function openDetail(idx) {
+  const l = filteredListings[idx];
+  const s = marketStats;
+  const badge = priceBadge(l.price, s);
+  const diff = l.price - s.cleanAvg;
+  const diffPct = Math.round((diff / s.cleanAvg) * 100);
+  const diffStr = diff > 0 ? `$${Math.abs(diff).toLocaleString()} above` : `$${Math.abs(diff).toLocaleString()} below`;
+  const pricePos = Math.min(Math.max(((l.price - s.q1) / (s.q3 - s.q1)) * 100, 5), 95);
+
+  const insight = diff < 0
+    ? `<strong>This looks like a deal.</strong> Listed at ${Math.abs(diffPct)}% below the clean market average of $${s.cleanAvg.toLocaleString()}. Worth a closer look — just check condition carefully before buying.`
+    : diff < s.cleanAvg * 0.15
+    ? `<strong>Fairly priced.</strong> This is close to the market average of $${s.cleanAvg.toLocaleString()}. Negotiating down 10–15% would put it in deal territory.`
+    : `<strong>Priced high.</strong> Listed ${diffPct}% above the clean market average. The seller likely has room to negotiate, or this has features/condition that justify the premium.`;
+
+  document.getElementById('detailPanel').innerHTML = `
+    <button class="detail-close" onclick="closeDetail()">✕ Close</button>
+    <div class="detail-title">${l.title}</div>
+    <div class="detail-price">$${l.price.toLocaleString()} <span class="listing-badge ${badge.cls}" style="font-size:12px;vertical-align:middle;">${badge.label}</span></div>
+    ${l.photo ? `<img class="detail-img" src="${l.photo}" alt="${l.title}" onerror="this.style.display='none'">` : ''}
+
+    <div class="detail-section">
+      <div class="detail-section-title">Market comparison</div>
+      <div class="compare-bar">
+        <div class="compare-bar-label"><span>This listing</span><span>$${l.price.toLocaleString()}</span></div>
+        <div class="compare-bar-track"><div class="compare-bar-fill ${diff<0?'green':diff>s.cleanAvg*0.2?'red':''}" style="width:${pricePos}%"></div></div>
+      </div>
+      <div class="compare-bar">
+        <div class="compare-bar-label"><span>Market average (clean)</span><span>$${s.cleanAvg.toLocaleString()}</span></div>
+        <div class="compare-bar-track"><div class="compare-bar-fill" style="width:50%;background:#888"></div></div>
+      </div>
+      <div class="compare-bar">
+        <div class="compare-bar-label"><span>Median</span><span>$${s.median.toLocaleString()}</span></div>
+        <div class="compare-bar-track"><div class="compare-bar-fill" style="width:${Math.min(Math.max(((s.median-s.q1)/(s.q3-s.q1))*100,5),95)}%;background:#888"></div></div>
+      </div>
+      <p style="font-size:12px;color:var(--text3);margin-top:8px;">${diffStr} clean market average · Based on ${s.total} listings</p>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">AI insight</div>
+      <div class="insight-box">${insight}</div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">Quick stats for this search</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="insight-box" style="margin:0"><div style="font-size:11px;color:var(--text3)">Listings tracked</div><strong>${s.total}</strong></div>
+        <div class="insight-box" style="margin:0"><div style="font-size:11px;color:var(--text3)">Clean avg</div><strong>$${s.cleanAvg.toLocaleString()}</strong></div>
+        <div class="insight-box" style="margin:0"><div style="font-size:11px;color:var(--text3)">Price range</div><strong>$${s.q1.toLocaleString()} – $${s.q3.toLocaleString()}</strong></div>
+        <div class="insight-box" style="margin:0"><div style="font-size:11px;color:var(--text3)">Under $1k</div><strong>${s.under1k} listings</strong></div>
+      </div>
+    </div>
+
+    <a class="detail-cta" href="${l.url}" target="_blank" rel="noopener">View on Facebook Marketplace ↗</a>
+  `;
+  document.getElementById('detailOverlay').classList.remove('hidden');
+}
+
+function closeDetail() { document.getElementById('detailOverlay').classList.add('hidden'); }
+function closeDetailOutside(e) { if (e.target.id === 'detailOverlay') closeDetail(); }
+
+function setLoading(on) {
+  document.getElementById('loadingSection').classList.toggle('hidden', !on);
+  document.getElementById('statsSection').classList.toggle('hidden', on);
+  document.getElementById('listingsSection').classList.toggle('hidden', on);
+  document.getElementById('emptySection').classList.add('hidden');
+  document.getElementById('searchBtn').disabled = on;
+  document.getElementById('searchBtn').textContent = on ? 'Searching...' : 'Search market';
+}
+
+function showEmpty() {
+  document.getElementById('statsSection').classList.add('hidden');
+  document.getElementById('listingsSection').classList.add('hidden');
+  document.getElementById('emptySection').classList.remove('hidden');
+}
+
+function getSeedData() {
+  return [{"title":"Boat trailer","price":500,"url":"https://www.facebook.com/marketplace/item/2189949368425758","photo":"","location":"Albany, NY","category":"boats"},{"title":"1990 Boat W trailer","price":950,"url":"https://www.facebook.com/marketplace/item/998313616494601","photo":"","location":"Albany, NY","category":"boats"},{"title":"1987 Larson Citation","price":2500,"url":"https://www.facebook.com/marketplace/item/2442960746143827","photo":"","location":"Albany, NY","category":"boats"},{"title":"Fishing boat","price":1000,"url":"https://www.facebook.com/marketplace/item/2187885165301622","photo":"","location":"Albany, NY","category":"boats"},{"title":"2007 Stingray 180RX","price":4500,"url":"https://www.facebook.com/marketplace/item/1671719260547929","photo":"","location":"Albany, NY","category":"boats"},{"title":"Bayliner Cierra","price":4000,"url":"https://www.facebook.com/marketplace/item/4506724136318639","photo":"","location":"Albany, NY","category":"boats"},{"title":"2001 Stingray 18ft with trailer","price":4500,"url":"https://www.facebook.com/marketplace/item/2975050252697031","photo":"","location":"Albany, NY","category":"boats"},{"title":"1998 Glass port need gone","price":2950,"url":"https://www.facebook.com/marketplace/item/1495079835422829","photo":"","location":"Albany, NY","category":"boats"},{"title":"Bass boat","price":500,"url":"https://www.facebook.com/marketplace/item/691838903595715","photo":"","location":"Albany, NY","category":"boats"},{"title":"Cobia Sanlando Boat","price":1500,"url":"https://www.facebook.com/marketplace/item/973880465044330","photo":"","location":"Albany, NY","category":"boats"},{"title":"1990 Aluminum fishing boat","price":1900,"url":"https://www.facebook.com/marketplace/item/1965865624305909","photo":"","location":"Albany, NY","category":"boats"},{"title":"1988 Legend center console","price":2000,"url":"https://www.facebook.com/marketplace/item/2140704253442308","photo":"","location":"Albany, NY","category":"boats"},{"title":"1993 Sea Ray 250 Express Cruiser","price":4700,"url":"https://www.facebook.com/marketplace/item/1307363087527439","photo":"","location":"Albany, NY","category":"boats"},{"title":"Jon boat & accessories","price":650,"url":"https://www.facebook.com/marketplace/item/1334926498521912","photo":"","location":"Albany, NY","category":"boats"},{"title":"1992 Cobia Monte Carlo","price":3200,"url":"https://www.facebook.com/marketplace/item/4464645687137375","photo":"","location":"Albany, NY","category":"boats"},{"title":"1990 Sea Ray 220da","price":4000,"url":"https://www.facebook.com/marketplace/item/1282944700655729","photo":"","location":"Albany, NY","category":"boats"},{"title":"1997 Yamaha exciter 220 jet boat","price":1995,"url":"https://www.facebook.com/marketplace/item/1065228708899229","photo":"","location":"Albany, NY","category":"boats"},{"title":"2005 Bayliner 175 17ft","price":4500,"url":"https://www.facebook.com/marketplace/item/4263688433885411","photo":"","location":"Albany, NY","category":"boats"},{"title":"1994 Sylvan 16","price":2500,"url":"https://www.facebook.com/marketplace/item/1270520011877716","photo":"","location":"Albany, NY","category":"boats"},{"title":"14ft Metal boat","price":1200,"url":"https://www.facebook.com/marketplace/item/1517164509793955","photo":"","location":"Albany, NY","category":"boats"},{"title":"21 ft Sylvan boat 1987","price":5600,"url":"https://www.facebook.com/marketplace/item/1016818867696406","photo":"","location":"Albany, NY","category":"boats"},{"title":"1986 Checkmate speed boat 150hp mercury","price":2250,"url":"https://www.facebook.com/marketplace/item/948023408056478","photo":"","location":"Albany, NY","category":"boats"},{"title":"1994 Regal 300","price":6000,"url":"https://www.facebook.com/marketplace/item/1429280835904707","photo":"","location":"Albany, NY","category":"boats"},{"title":"1988 Thundercraft limited edition","price":2500,"url":"https://www.facebook.com/marketplace/item/1864332864251883","photo":"","location":"Albany, NY","category":"boats"},{"title":"Cobalt 222 1989 DuoProp","price":3000,"url":"https://www.facebook.com/marketplace/item/1380504387200949","photo":"","location":"Albany, NY","category":"boats"},{"title":"1998 ProCraft 17 bass boat","price":7000,"url":"https://www.facebook.com/marketplace/item/1557721148590520","photo":"","location":"Albany, NY","category":"boats"},{"title":"Dingy boat and motor","price":700,"url":"https://www.facebook.com/marketplace/item/1794870358158326","photo":"","location":"Albany, NY","category":"boats"},{"title":"1989 Dynasty 195 Cuddy boat","price":1695,"url":"https://www.facebook.com/marketplace/item/1453030256311030","photo":"","location":"Albany, NY","category":"boats"},{"title":"Sunbird Corsair 150 50 HP Johnson","price":3500,"url":"https://www.facebook.com/marketplace/item/1454453175644609","photo":"","location":"Albany, NY","category":"boats"},{"title":"2004 Tracker v16","price":8500,"url":"https://www.facebook.com/marketplace/item/942716655201949","photo":"","location":"Albany, NY","category":"boats"},{"title":"2001 Seadoo Speedster 5 seater","price":5000,"url":"https://www.facebook.com/marketplace/item/1664362291356704","photo":"","location":"Albany, NY","category":"boats"},{"title":"1989 Regal","price":3500,"url":"https://www.facebook.com/marketplace/item/2018938125371111","photo":"","location":"Albany, NY","category":"boats"},{"title":"2001 Tahoe 24ft sierra","price":8700,"url":"https://www.facebook.com/marketplace/item/1063072085387799","photo":"","location":"Albany, NY","category":"boats"},{"title":"1979 StarCraft runabout boat","price":2000,"url":"https://www.facebook.com/marketplace/item/1348037957220896","photo":"","location":"Albany, NY","category":"boats"},{"title":"Sweetwater Pontoon Boat Mercury 75","price":3000,"url":"https://www.facebook.com/marketplace/item/1613189126419077","photo":"","location":"Albany, NY","category":"boats"},{"title":"12 foot row boat with 5.5 motor","price":500,"url":"https://www.facebook.com/marketplace/item/26385403627820034","photo":"","location":"Albany, NY","category":"boats"},{"title":"Regal 19 Ft bow rider 1987","price":1500,"url":"https://www.facebook.com/marketplace/item/1101822184797987","photo":"","location":"Albany, NY","category":"boats"},{"title":"24 foot center console 200 Johnson","price":850,"url":"https://www.facebook.com/marketplace/item/1884220652255019","photo":"","location":"Albany, NY","category":"boats"},{"title":"1979 Glastron gt-150","price":1800,"url":"https://www.facebook.com/marketplace/item/1301246578607849","photo":"","location":"Albany, NY","category":"boats"},{"title":"2017 venture custom aluminum trailer","price":2200,"url":"https://www.facebook.com/marketplace/item/1654685479154347","photo":"","location":"Albany, NY","category":"boats"}];
+}
+</script>
+</body>
+</html>
