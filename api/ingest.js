@@ -1,82 +1,39 @@
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
+  // 1. Handle testing the URL in the browser
   if (req.method === 'GET') {
-    return res.status(200).json({ status: 'live' });
+    return res.status(200).json({ status: 'FlipIQ ingest endpoint live' });
   }
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const SUPABASE_URL = 'https://fasszewcztnqcjaaswcm.supabase.co';
+  const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+
   try {
     const body = req.body || {};
-    const datasetId = (body.resource && body.resource.defaultDatasetId) || body.defaultDatasetId;
+    
+    // Extract datasetId depending on how Apify wraps the webhook payload
+    const datasetId = body.resource?.defaultDatasetId || body.defaultDatasetId || body.datasetId;
 
     if (!datasetId) {
-      return res.status(200).json({ debug: 'no dataset id', body: body });
+      return res.status(200).json({ debug: 'No dataset ID found in payload', receivedBody: body });
     }
 
-    const apifyRes = await fetch('https://api.apify.com/v2/datasets/' + datasetId + '/items?clean=true&format=json&limit=200');
+    // 2. Fetch the data back from Apify
+    const apifyRes = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?clean=true&format=json&limit=200`);
+    if (!apifyRes.ok) {
+      return res.status(500).json({ error: 'Failed to fetch dataset from Apify' });
+    }
+    
     const items = await apifyRes.json();
 
-    if (!items || !items.length) {
-      return res.status(200).json({ message: 'empty dataset', datasetId: datasetId });
+    if (!items || items.length === 0) {
+      return res.status(200).json({ message: 'Empty dataset received from Apify' });
     }
 
-    const listings = [];
-    for (var i = 0; i < items.length; i++) {
-      var item = items[i];
-      var priceStr = '';
-      if (item.listing_price && item.listing_price.formatted_amount) {
-        priceStr = item.listing_price.formatted_amount;
-      } else if (item.price) {
-        priceStr = String(item.price);
-      }
-      var price = parseFloat(priceStr.replace(/[$,]/g, ''));
-      if (price > 50 && price < 75000) {
-        var city = 'Albany, NY';
-        if (item.location && item.location.reverse_geocode && item.location.reverse_geocode.city) {
-          city = item.location.reverse_geocode.city + ', ' + item.location.reverse_geocode.state;
-        }
-        listings.push({
-          title: item.marketplace_listing_title || item.title || 'Unknown',
-          price: price,
-          url: item.listingUrl || item.url || '',
-          photo: (item.primary_listing_photo && item.primary_listing_photo.photo_image_url) || '',
-          location: city,
-          category: 'boats',
-          scraped_at: new Date().toISOString(),
-          last_seen: new Date().toISOString()
-        });
-      }
-    }
-
-    if (!listings.length) {
-      return res.status(200).json({ message: 'no valid listings after filter' });
-    }
-
-    var supabaseRes = await fetch('https://fasszewcztnqcjaaswcm.supabase.co/rest/v1/listings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': process.env.SUPABASE_SERVICE_KEY,
-        'Authorization': 'Bearer ' + process.env.SUPABASE_SERVICE_KEY,
-        'Prefer': 'return=minimal'
-      },
-      body: JSON.stringify(listings)
-    });
-
-    if (!supabaseRes.ok) {
-      var err = await supabaseRes.text();
-      return res.status(500).json({ error: err, count: listings.length });
-    }
-
-    return res.status(200).json({ message: 'inserted ' + listings.length + ' listings' });
-
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-};    }
-
+    // 3. Map and format the data for your database
     const listings = items
       .filter(item => {
         const priceStr = item.listing_price?.formatted_amount || item.price || '';
@@ -88,84 +45,40 @@ module.exports = async function handler(req, res) {
         const price = parseFloat(String(priceStr).replace(/[$,]/g, ''));
         return {
           title: item.marketplace_listing_title || item.title || 'Unknown',
-          price,
+          price: price,
           url: item.listingUrl || item.url || '',
           photo: item.primary_listing_photo?.photo_image_url || item.photo || '',
-          location: item.location?.reverse_geocode?.city
+          location: item.location?.reverse_geocode?.city 
             ? `${item.location.reverse_geocode.city}, ${item.location.reverse_geocode.state}`
             : 'Albany, NY',
           category: 'boats',
           scraped_at: new Date().toISOString(),
-          last_seen: new Date().toISOString(),
-        };
-      });
-
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/listings`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_SERVICE_KEY,
-        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
-        'Prefer': 'return=minimal',
-      },
-      body: JSON.stringify(listings),
-    });
-
-    if (!response.ok) {
-      const err = await response.text();
-      return res.status(500).json({ error: err, datasetId, count: listings.length });
-    }
-
-    return res.status(200).json({ 
-      message: `Inserted ${listings.length} listings successfully`,
-      datasetId
-    });
-
-  } catch (err) {
-    return res.status(500).json({ error: err.message, stack: err.stack });
-  }
-}      .map(item => {
-        const priceStr = item.listing_price?.formatted_amount || 
-                        item.price || '0';
-        const price = parseFloat(String(priceStr).replace(/[$,]/g, ''));
-        return {
-          title: item.marketplace_listing_title || item.title || 'Unknown',
-          price,
-          url: item.listingUrl || item.url || '',
-          photo: item.primary_listing_photo?.photo_image_url || 
-                 item.photo || '',
-          location: item.location?.reverse_geocode?.city
-            ? `${item.location.reverse_geocode.city}, ${item.location.reverse_geocode.state}`
-            : 'Albany, NY',
-          category: 'boats',
-          scraped_at: new Date().toISOString(),
-          last_seen: new Date().toISOString(),
+          last_seen: new Date().toISOString()
         };
       });
 
     if (listings.length === 0) {
-      return res.status(200).json({ message: 'No valid listings after filtering' });
+      return res.status(200).json({ message: 'No valid boat listings after applying filters' });
     }
 
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/listings`, {
+    // 4. Send the clean data over to Supabase
+    const supabaseRes = await fetch(`${SUPABASE_URL}/rest/v1/listings`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'apikey': SUPABASE_SERVICE_KEY,
         'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
-        'Prefer': 'resolution=merge-duplicates',
+        'Prefer': 'return=minimal'
       },
-      body: JSON.stringify(listings),
+      body: JSON.stringify(listings)
     });
 
-    if (!response.ok) {
-      const err = await response.text();
-      return res.status(500).json({ error: err });
+    if (!supabaseRes.ok) {
+      const errText = await supabaseRes.text();
+      return res.status(500).json({ error: errText, count: listings.length });
     }
 
-    return res.status(200).json({ 
-      message: `Inserted ${listings.length} listings successfully` 
-    });
+    return res.status(200).json({ message: `Successfully inserted ${listings.length} boat listings!` });
 
   } catch (err) {
     return res.status(500).json({ error: err.message });
