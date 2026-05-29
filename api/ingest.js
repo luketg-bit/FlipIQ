@@ -22,7 +22,7 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ message: 'empty dataset', datasetId: datasetId });
     }
 
-    const listings = [];
+    var listings = [];
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
       var priceStr = '';
