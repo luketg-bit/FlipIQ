@@ -334,8 +334,17 @@ let activeFilter = 'all';
 async function login() {
   const email = document.getElementById('loginEmail').value;
   const pw = document.getElementById('loginPassword').value;
-  const { error } = await sb.auth.signInWithPassword({ email, password: pw });
-  if (error) { showError('loginError', error.message); return; }
+  
+  const { data, error } = await sb.auth.signInWithPassword({ 
+    email, 
+    password: pw 
+  });
+  
+  if (error) { 
+    showError('loginError', error.message); 
+    return; 
+  }
+  
   closeModal();
 }
 
@@ -344,12 +353,22 @@ async function signup() {
   const pw = document.getElementById('signupPassword').value;
   const city = document.getElementById('signupCity').value;
   const cat = document.getElementById('signupCategory').value;
+  
   const { data, error } = await sb.auth.signUp({ email, password: pw });
-  if (error) { showError('signupError', error.message); return; }
-  if (data.user) {
-    await sb.from('profiles').upsert({ id: data.user.id, city, default_category: cat });
+  
+  if (error) { 
+    showError('signupError', error.message); 
+    return; 
   }
-  closeModal();
+  
+  if (data.user) {
+    await sb.from('profiles').upsert({ 
+      id: data.user.id, 
+      city, 
+      default_category: cat 
+    });
+    closeModal();
+  }
 }
 
 async function logout() {
